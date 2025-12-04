@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Kasatria Assignment - 3D Data Visualization</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        
+        <div id="legend">
+            <div class="bar"></div>
+            <div class="labels">
+                <span>LOW (&lt;100k)</span>
+                <span>HIGH (&gt;200k)</span>
+            </div>
+        </div>
+
+        <style>
+            html, body {
+                height: 100%;
+            }
+            body {
+                background-color: #000000;
+                margin: 0;
+                font-family: Helvetica, sans-serif;;
+                overflow: hidden;
+            }
+            a {
+                color: #ffffff;
+            }
+            #info {
+                position: absolute;
+                top: 10px;
+                width: 100%;
+                color: #ffffff;
+                padding: 5px;
+                font-family: Monospace;
+                font-size: 13px;
+                font-weight: bold;
+                text-align: center;
+                z-index: 1;
+            }
+            #menu {
+                position: absolute;
+                bottom: 20px;
+                width: 100%;
+                text-align: center;
+            }
+
+            #legend {
+                position: absolute;
+                bottom: 80px; 
+                left: 50%;
+                transform: translateX(-50%); 
+                width: 300px;
+                text-align: center;
+                z-index: 100;
+                pointer-events: none; 
+            }
+            #legend .bar {
+                height: 12px;
+                width: 100%;
+                /* Creates the Red -> Orange -> Green gradient */
+                background: linear-gradient(90deg, rgba(255,0,0,0.8) 0%, rgba(255,165,0,0.8) 50%, rgba(0,128,0,0.8) 100%);
+                border-radius: 6px;
+                border: 1px solid rgba(127,255,255,0.25);
+                box-shadow: 0 0 10px rgba(255,255,255,0.1);
+            }
+            #legend .labels {
+                display: flex;
+                justify-content: space-between;
+                color: rgba(127,255,255,0.75);
+                font-family: Helvetica, sans-serif;
+                font-size: 11px;
+                margin-top: 5px;
+                font-weight: bold;
+                text-shadow: 0 0 4px rgba(0,0,0,0.8);
+            }
+            .element {
+                width: 120px;
+                height: 180px; /* Made it slightly taller to fit everything */
+                box-shadow: 0px 0px 12px rgba(0,255,255,0.5);
+                border: 1px solid rgba(127,255,255,0.25);
+                text-align: center;
+                cursor: default;
+                
+                /* Stacks items vertically without overlap */
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: flex-start;
+                padding-top: 10px;
+                box-sizing: border-box; /* Ensures padding doesn't break size */
+            }
+
+            .element:hover {
+                box-shadow: 0px 0px 12px rgba(0,255,255,0.75);
+                border: 1px solid rgba(127,255,255,0.75);
+            }
+
+            .element img {
+                margin-bottom: 5px; 
+            }
+
+            .element .name-label {
+                font-size: 12px;
+                font-weight: bold;
+                color: rgba(255,255,255,0.9);
+                margin-bottom: 5px;
+                line-height: 1.2;
+                max-width: 90%; 
+                word-wrap: break-word; 
+            }
+
+            .element .details {
+                font-size: 12px;
+                color: rgba(127,255,255,0.75);
+                margin-top: auto; 
+                padding-bottom: 10px;
+            }
+
+            button {
+                color: rgba(127,255,255,0.75);
+                background: transparent;
+                outline: 1px solid rgba(127,255,255,0.75);
+                border: 0px;
+                padding: 5px 10px;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: rgba(0,255,255,0.5);
+            }
+            button:active {
+                color: #000000;
+                background-color: rgba(0,255,255,0.75);
+            }
+        </style>
+    </head>
+    <body>
+
+        <div id="info">Kasatria Assessment- Dhia</div>
+        <div id="container"></div>
+        <div id="menu">
+            <button id="table">TABLE</button>
+            <button id="sphere">SPHERE</button>
+            <button id="helix">HELIX</button>
+            <button id="grid">GRID</button>
+            <button id="reset">RESET</button>
+        </div>
+
+        <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+		</script>
+
+        <script type="module">
+
+            import * as THREE from 'three';
+            import TWEEN from 'three/addons/libs/tween.module.js';
+            import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+            import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+            // --- VARIABLES ---
+            let table = [];
+            let camera, scene, renderer;
+            let controls;
+            const objects = [];
+            const targets = { table: [], sphere: [], helix: [], grid: [] };
+
+            // --- DATA CONNECTION ---
+            const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTe4Y7a8l0T7Ru36XFYpkzsj9IYJcf_sfVJvnxP-22hObfhpT9wLZw4YZgO4L7n3fTqmhVUxUbBJaKW/pub?output=csv';
+            // Fetch Data
+            function loadData() {
+                fetch(sheetUrl)
+                    .then(response => response.text())
+                    .then(csvText => {
+                        parseCSV(csvText);
+                        init();     // Initialize 3D world
+                        animate();  // Start animation loop
+                    })
+                    .catch(error => {
+                        console.error('Error loading Sheet:', error);
+                        alert("Could not load data. Check console for details.");
+                    });
+            }
+
+            // Parse CSV
+			function parseCSV(text) {
+				const rows = text.split('\n');
+				for (let i = 1; i < rows.length; i++) {
+					// This regex handles the commas inside the "$250,000" money values
+					const parts = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+					
+					if (parts.length < 6) continue; // Safety check for empty rows
+
+					// --- MAPPING YOUR COLUMNS ---
+					const name = parts[0].trim();   // Column A: Name
+					const image = parts[1].trim();  // Column B: Photo URL 
+					
+					// Clean up Net Worth (Column F is index 5)
+					let netWorth = parts[5].trim().replace(/^"|"$/g, ''); 
+
+					// Layout Math
+					const col = (i % 20) + 1; 
+					const rowNum = Math.floor(i / 20) + 1;
+
+					// Save to list
+					table.push({ 
+						name: name, 
+						image: image,    
+						netWorth: netWorth, 
+						col: col, 
+						row: rowNum 
+					});
+				}
+			}
+
+            // --- MAIN INITIALIZATION ---
+            function init() {
+
+                // Camera & Scene
+                camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 10000 );
+                camera.position.z = 3000;
+                scene = new THREE.Scene();
+
+                // Loop through Data to create Cards & Layouts
+                for ( let i = 0; i < table.length; i ++ ) {
+
+                    const item = table[i];
+
+                    // HTML Elements lah lupa
+                    const element = document.createElement( 'div' );
+                    element.className = 'element';
+
+                    // Color Logic based on Net Worth (Red < 100k, Orange > 100k, Green > 200k)
+                    // Removing '$' and 'K' to compare numbers- this is why not working for the first time adeh
+                    const valueStr = item.netWorth.replace(/[$,"]/g, ''); 
+					const worthValue = parseFloat(valueStr); 
+                    
+                    if (worthValue > 200000) {
+                        element.style.backgroundColor = 'rgba(0,128,0,0.8)'; // Green
+                    } else if (worthValue > 100000) {
+                        element.style.backgroundColor = 'rgba(255,165,0,0.8)'; // Orange
+                    } else {
+                        element.style.backgroundColor = 'rgba(255,0,0,0.8)'; // Red
+                    }
+
+                    // Image
+                    const img = document.createElement('img');
+                    img.src = item.image; 
+                    img.style.width = '100px'; 
+                    img.style.height = 'auto';
+                    element.appendChild(img);
+
+                    // Name
+                    const name = document.createElement( 'div' );
+                    name.className = 'name-label'; 
+                    name.textContent = item.name;
+                    element.appendChild( name );
+
+                    // Net Worth
+                    const details = document.createElement( 'div' );
+                    details.className = 'details';
+                    details.innerHTML = item.netWorth;
+                    element.appendChild( details );
+
+                    // Create CSS3D Object
+                    const object = new CSS3DObject( element );
+                    object.position.x = Math.random() * 4000 - 2000;
+                    object.position.y = Math.random() * 4000 - 2000;
+                    object.position.z = Math.random() * 4000 - 2000;
+                    scene.add( object );
+                    objects.push( object );
+
+                    // --- LAYOUT 1: TABLE (20x10) ---
+                    const objectTable = new THREE.Object3D();
+                    objectTable.position.x = ( item.col * 140 ) - 1330;
+                    objectTable.position.y = - ( item.row * 180 ) + 990;
+                    targets.table.push( objectTable );
+                }
+
+                // --- LAYOUT 2: SPHERE ---
+                const vector = new THREE.Vector3();
+                for ( let i = 0, l = objects.length; i < l; i ++ ) {
+                    const phi = Math.acos( - 1 + ( 2 * i ) / l );
+                    const theta = Math.sqrt( l * Math.PI ) * phi;
+                    const object = new THREE.Object3D();
+                    object.position.setFromSphericalCoords( 800, phi, theta );
+                    vector.copy( object.position ).multiplyScalar( 2 );
+                    object.lookAt( vector );
+                    targets.sphere.push( object );
+                }
+
+                // --- LAYOUT 3: HELIX (Double Helix) ---
+                for ( let i = 0, l = objects.length; i < l; i ++ ) {
+                    const theta = (i * 0.175) + Math.PI; 
+                    const y = - ( i * 8 ) + 450;
+                    
+                    // Double Helix Offset: Even = 0, Odd = PI
+                    const offset = (i % 2 === 0) ? 0 : Math.PI; 
+
+                    const object = new THREE.Object3D();
+                    object.position.setFromCylindricalCoords( 900, theta + offset, y );
+                    
+                    vector.x = object.position.x * 2;
+                    vector.y = object.position.y;
+                    vector.z = object.position.z * 2;
+                    object.lookAt( vector );
+                    targets.helix.push( object );
+                }
+
+                // --- LAYOUT 4: GRID (5x4x10) ---
+                for ( let i = 0; i < objects.length; i ++ ) {
+                    const object = new THREE.Object3D();
+                    // 5 items wide (x), 4 items high (y), 10 items deep (z)
+                    object.position.x = ( ( i % 5 ) * 400 ) - 800;
+                    object.position.y = ( - ( Math.floor( i / 5 ) % 4 ) * 400 ) + 800;
+                    object.position.z = ( Math.floor( i / 20 ) ) * 1000 - 2000;
+                    targets.grid.push( object );
+                }
+
+                // --- RENDERER ---
+                renderer = new CSS3DRenderer();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                document.getElementById( 'container' ).appendChild( renderer.domElement );
+
+                // --- CONTROLS ---
+                controls = new TrackballControls( camera, renderer.domElement );
+                controls.minDistance = 500;
+                controls.maxDistance = 6000;
+                controls.addEventListener( 'change', render );
+
+                // --- BUTTON LISTENERS ---
+                const buttonTable = document.getElementById( 'table' );
+                buttonTable.addEventListener( 'click', function () { transform( targets.table, 2000 ); } );
+
+                const buttonSphere = document.getElementById( 'sphere' );
+                buttonSphere.addEventListener( 'click', function () { transform( targets.sphere, 2000 ); } );
+
+                const buttonHelix = document.getElementById( 'helix' );
+                buttonHelix.addEventListener( 'click', function () { transform( targets.helix, 2000 ); } );
+
+                const buttonGrid = document.getElementById( 'grid' );
+                buttonGrid.addEventListener( 'click', function () { transform( targets.grid, 2000 ); } );
+
+                const buttonReset = document.getElementById( 'reset' );
+                buttonReset.addEventListener( 'click', function () {
+                    
+                    // Move cards back to Table formation
+                    transform( targets.table, 2000 ); 
+
+                    // Reset the Camera (Zoom & Rotation) to start
+                    controls.reset(); 
+                    
+                } );
+            
+                // Start with Table View
+                transform( targets.table, 2000 );
+
+                window.addEventListener( 'resize', onWindowResize );
+            }
+
+            // --- ANIMATION & TRANSFORMS ---
+            function transform( targets, duration ) {
+                TWEEN.removeAll();
+                for ( let i = 0; i < objects.length; i ++ ) {
+                    const object = objects[ i ];
+                    const target = targets[ i ];
+
+                    new TWEEN.Tween( object.position )
+                        .to( { x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration )
+                        .easing( TWEEN.Easing.Exponential.InOut )
+                        .start();
+
+                    new TWEEN.Tween( object.rotation )
+                        .to( { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration )
+                        .easing( TWEEN.Easing.Exponential.InOut )
+                        .start();
+                }
+
+                new TWEEN.Tween( this )
+                    .to( {}, duration * 2 )
+                    .onUpdate( render )
+                    .start();
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                render();
+            }
+
+            function animate() {
+                requestAnimationFrame( animate );
+                TWEEN.update();
+                controls.update();
+            }
+
+            function render() {
+                renderer.render( scene, camera );
+            }
+
+            // Start the process
+            loadData();
+
+        </script>
+    </body>
+</html>
